@@ -54,3 +54,14 @@ class Inductor(Component):
         self.i_norton = Current_Source(self.node1, self.node2, self.current, self.name + "_n_i")
     def __repr__(self):
         return f"{self.node1} - {self.node2} {self.inductance}L"
+
+class Diode(Component):
+    # Reference page B-4 of microelectronic circuits
+    # Vt = 25.85mV
+    def __init__(self, node1, node2, I_sat, thermal_voltage, voltage, name):
+        super().__init__(node1, node2, name)
+        self.I_sat = float(I_sat)
+        self.thermal_voltage = float(thermal_voltage)
+        self.voltage = float(voltage)
+    def __repr__(self):
+        return f"{self.node1} - {self.node2} {self.voltage}V {self.}"

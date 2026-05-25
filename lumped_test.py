@@ -195,6 +195,7 @@ def test_lr_charging():
     print(component_list)
 
     lumped.MNA_time(graph, component_list, dt, end_time)
+
 #test_network_generation_MNA()
 #test_current_MNA()
 #test_time_varrying_MNA()
