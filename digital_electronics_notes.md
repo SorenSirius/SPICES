@@ -55,4 +55,4 @@ $I = -I_s$
 Breakdown region:
 
 Newton-Raphson method:
-Make a guess for the value on the exponential relationship curve is then iterate. 
+Make a guess for the value on the exponential relationship curve is then iterate.

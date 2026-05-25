@@ -64,4 +64,4 @@ class Diode(Component):
         self.thermal_voltage = float(thermal_voltage)
         self.voltage = float(voltage)
     def __repr__(self):
-        return f"{self.node1} - {self.node2} {self.voltage}V {self.}"
+        return f"{self.node1} - {self.node2} {self.voltage}V"
