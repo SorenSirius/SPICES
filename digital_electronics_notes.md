@@ -56,3 +56,44 @@ Breakdown region:
 
 Newton-Raphson method:
 Make a guess for the value on the exponential relationship curve is then iterate.
+
+## Mosfets
+
+### n-mos
+
+The n-type mosfet, or n-mos, is a semiconducting device which essentially funcitons as a voltage controlled resistor or voltage controlled current source depending on the inputs.
+
+An n-mos transistor consists of a p-type body with 2 cut in sections of n-type silicon inlaid. Bridging the gap between the two n-type segments and laid on top of the p-mos body is an insulating material which is connected to Vg. The two n-type segments are connected to Vd and Vs respectively. Vd is where the electrons flow into and Vs is where the electrons flow from. This naturally implies that Vd is at a higher potential than Vs. 
+
+When we apply a voltage to the gate, Vg, the insulator acts as dialectric for a parallel plate capactitor formed between Vg and the p-type body, which we connect to ground in most cases. It is useful to deal with $C_{ox}$ which is defined in terms of capacitance per unit area, $[F/{m^2}]$. We know from capacitor theory that $CV=Q$.
+
+In the case of n-mos transistors the charge which assembles on the bottom plate of the insulator is produced by two sources. Initially the p-type body will repel its holes away from the plate, resulting in a depleted negatively charged area underneat the plate. The second source is free electorns from the abundant electrons in the n-type regions. Once the voltage difference exceeds $V_{th}$ this begins to create a conducting channel. 
+
+In this case the free charge which has accumumlated under the plate for conduction can be modeled as $Q_s=(V_g-V_t)C_{ox}$ where $Q_s$ is the charge per unit area on the underside of the capacitor.
+
+We know from our earlier study of current that we can define current as follows:
+
+### Triode Region
+
+1. $I = n * q * A * v_{drift}$
+
+Current is equal to the number of particles per unit volume, multiplied by the velocity of the particles, multiplied by the cross sectional area of interest, times the charge per particle. $[1/m^3] * [m/s] * [m^2] * [C] = [C/s]$ Velocity is essential length per time, so if you draw a box with the velocity times time length and area width, you can multiply it by the charge density to get the total charge in that box, aka, current.
+
+2. $I = Q_s * v_{drift}$
+
+This equation substitutes $n * q * A$ for $Q_s$ which has units of $[C/m]$ and represents the charge per unit length along the channel. This seems like it needs further explanation for the case when the channel is not constant depth and thus has a different velocity. This will almost certainly run into issues for the case where $V_d != V_s != Gnd$ because then the charge per unit length will be different. We will have to revisit. All that really matters in measuring current is that you have some concept of how much charge is in the measured surface of interest, in this case we can simplify the calculation because we already know the charge per unit area rather than volume. 
+
+3. $I = Q_s * E * u_n$
+
+This equation simply swaps our drif velocity for the electric field times the electron mobility. We are only concerned with electron mobility here because only electrons carry the current in n-mos transistors. Holes will face tremendous opposition trying to get out of the n-type drain and source connections, as there are nearly 0 vacancies for holes. From unitary analysis we know [m/s] = [V/Cm] * u_n$ -> $u_n = [m^2/{Vs}]$
+
+4. $E = V_{ds}/L$ No new field is generated within the electrically neutral p-type body and we are dealing with relatively short distances
+
+5. $Q_s = C_{ox} * (WL) * (V_g - V_b) / L$
+
+The charge per unit channel length can be found from the capacitor formula $C=QV$ applied to the whole gate capacitance $C_{ox} * (WL)$ and the voltage applied $V_g$ because $V_b$ is usually tied to ground.
+
+6. $I = (C_{ox} * (W/L) * (V_g))*V_{ds}$
+
+Combining together all the previous equations we arrive at the equation for current when the drain and source terminals are held very similar and close in potential to the body voltage.
+

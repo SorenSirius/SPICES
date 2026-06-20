@@ -63,6 +63,19 @@ def test_current_MNA():
 
     lumped.MNA(graph, component_list)
 
+def test_voltage_MNA():
+    text = """R Va Vb 1000 R2
+    R Va 0 500 R1
+    R Vb 0 1500 R3
+    V Va Vb 10 V1"""
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+
+    print(graph)
+    print(component_list)
+
+    lumped.MNA(graph, component_list)
+
 def test_time_varrying_MNA():
     text = """V, Vb, Va, 5, V1
     R, Va, 0, 100, R1
@@ -198,10 +211,11 @@ def test_lr_charging():
 
 #test_network_generation_MNA()
 #test_current_MNA()
+test_voltage_MNA()
 #test_time_varrying_MNA()
 #test_plotting()
 #exp_decay_cap_test()
 #test_RLC_basic()
 #test_LR_decay()
-test_LC_basic()
+#test_LC_basic()
 #test_lr_charging()
