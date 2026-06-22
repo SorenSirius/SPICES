@@ -228,7 +228,7 @@ def test_lr_charging_op():
 def diode_test():
     text = """R, Vs, Vd, 10, R1
     D, Vd, 0, D1
-    V, 0, Vs, 5, V1
+    V, 0, Vs, 10, V1
     """
     components = network_helper.parse_network(text)
     graph, component_list = network_helper.assemble_network_graph(components)
@@ -249,6 +249,7 @@ def diode_stability_test():
     print(component_list)
 
     lumped.MNA(graph, component_list, non_linear=True, tolerance=0.01)
+
 #test_network_generation_MNA()
 #test_current_MNA()
 #test_voltage_MNA()
@@ -257,7 +258,7 @@ def diode_stability_test():
 #exp_decay_cap_test()
 #test_RLC_basic()
 #test_LR_decay()
-#test_LC_basic()
+test_LC_basic()
 #test_lr_charging_op()
-diode_test()
+#diode_test()
 #diode_stability_test()

@@ -78,7 +78,7 @@ def populate(component_list, graph, num_nodes, num_eqs):
         # finish KCL with currents flowing from voltage source
         elif isinstance(component, Voltage_Source):
             # we have defined the current as flowing from the pos term towards negative
-            print(component.node1, component.node2, "=", format_num(component.voltage))
+            #print(component.node1, component.node2, "=", format_num(component.voltage))
             populate_A_voltage(component, A, mna_idx)
     
     return (A,b,mna_idx,mna_idx_to_node)
@@ -88,9 +88,57 @@ def update_diode(mna_idx, diode, z):
     z_grounded = np.pad(z, (0, 1), mode='constant')
     diode.voltage = z_grounded[mna_idx[diode.node1]] - z_grounded[mna_idx[diode.node2]]
     error = diode.voltage-diode.v_guess
-    print(f"We calculate {format_num(diode.voltage)} volts across diode {diode.name} after pass 1. initial guess was {format_num(diode.v_guess)}. Error: {format_num(error)}")
+    #print(f"We calculate {format_num(diode.voltage)} volts across diode {diode.name} after pass 1. initial guess was {format_num(diode.v_guess)}. Error: {format_num(error)}")
     diode.v_guess = max(diode.v_guess - diode.v_change_max, min(diode.v_guess+diode.v_change_max, diode.voltage))
     return error
+
+"""
+On the first pass, this function will compute the norton equivalent for all diodes with the given guess voltage.
+
+Continue to loop and solve the system of linear equations with the norton approximation
+
+The norton approximation generates a line at a tangent to the IV curve of the diode.
+
+Solving the system of equations determines the operating point with that linear approximation.
+
+Diodes are linear in terms of time but nonlinear in terms of voltage, so it makes sense to solve them at each point in time.
+"""
+def solve_non_linear(component_list, graph, num_nodes, num_eqs, tolerance):
+    loops = 0
+    while(True):
+        error = tolerance + 1
+        diode = None
+        for component in component_list:
+
+            if(isinstance(component,Diode)):
+                diode = component
+                if(loops > 0):
+                    error = update_diode(mna_idx, component, z)
+                component.compute_norton()
+
+        A,b,mna_idx, mna_idx_to_node = populate(component_list, graph, num_nodes, num_eqs)
+        
+        A_no_ground = A[0:-1, 0:-1] 
+        b_no_ground = b[0:-1]
+        z = np.linalg.solve(A_no_ground,b_no_ground)
+
+        if(error < tolerance or loops > 10):
+            return A,b,mna_idx, mna_idx_to_node, z
+
+        loops += 1
+
+def solve(component_list, graph, num_nodes, num_eqs, tolerance = 0):
+    if(tolerance):
+        return solve_non_linear(component_list, graph, num_nodes, num_eqs, tolerance)
+    
+    else:
+        A,b,mna_idx, mna_idx_to_node = populate(component_list, graph, num_nodes, num_eqs)
+        
+        A_no_ground = A[0:-1, 0:-1] 
+        b_no_ground = b[0:-1]
+        z = np.linalg.solve(A_no_ground,b_no_ground)
+
+        return A,b,mna_idx, mna_idx_to_node, z
 
 
 #solves for the operating point of a circuit
@@ -120,51 +168,17 @@ def MNA(graph, component_list, non_linear = False, tolerance = 0.01):
     num_eqs += num_nodes
 
 
-    # solve system of equations
-    loops = 0
-    if(non_linear): #TODO loop runs one extra time
-        #find predicted voltage across caps
-        while(True):
-            error = tolerance + 1
-            diode = None
-            for component in component_list:
-                if(isinstance(component,Diode)):
-                    diode = component
-                    if(loops > 0):
-                        error = update_diode(mna_idx, component, z)
-                    component.compute_norton()
+    populate_args = (component_list, graph, num_nodes, num_eqs)
 
-            A,b,mna_idx, mna_idx_to_node = populate(component_list, graph, num_nodes, num_eqs)
-            
-            print("eq b =", format_array(b))
-            print("A =", format_array(A))
-            
-            A_no_ground = A[0:-1, 0:-1] 
-            b_no_ground = b[0:-1]
-            z = np.linalg.solve(A_no_ground,b_no_ground)
+    A,b,mna_idx, mna_idx_to_node, z = solve(*populate_args, tolerance)
 
-            print(f"\n\nLoop number {loops}:")
-            print(f"Diode internals used: Resistance{format_num(diode.r_norton.resistance)}, Current: {format_num(diode.i_norton.current)}")
-            for i in range(num_nodes):
-                print("Voltage at node:", mna_idx_to_node[i], "=", format_num(z[i]))
-
-            for i in range(num_nodes, num_eqs):
-                print("Current through Voltage Source:", mna_idx_to_node[i], "=", format_num(z[i]))
-
-            if(error < tolerance or loops > 10):
-                break
-
-            loops += 1
-            
     EPS = 1e-12
 
     for i in range(num_nodes):
-        value = 0.0 if abs(z[i]) < EPS else z[i]
-        print("Voltage at node:", mna_idx_to_node[i], "=", f"{value:.2e}")
+        print("Voltage at node:", mna_idx_to_node[i], f"= {format_num(z[i])}")
 
     for i in range(num_nodes, num_eqs):
-        value = 0.0 if abs(z[i]) < EPS else z[i]
-        print("Current through Voltage Source:", mna_idx_to_node[i], "=", f"{value:.2e}")
+        print("Current through Voltage Source:", mna_idx_to_node[i], f"= {format_num(z[i])}")
 
 #Extending MNA to time varying circuits?
 def MNA_time(graph, component_list, dt = 0.01, end_time = 1, plot_voltage = True):
@@ -194,60 +208,13 @@ def MNA_time(graph, component_list, dt = 0.01, end_time = 1, plot_voltage = True
             mna_idx_to_node[idx] = node
             idx += 1
  
-    # map voltages to indicies on the matrix
-    for component in component_list:
-        if isinstance(component, Voltage_Source):
-            mna_idx[component.name] = idx
-            mna_idx_to_node[idx] = component.name
-            idx += 1
-
-    
     time = 0
     voltage_history = defaultdict(list)
     while(time < end_time):
-        A = np.zeros((num_eqs + 1,num_eqs + 1), dtype=float) #create extra dummy ground row/col to discard eqs
-        b = np.zeros(num_eqs + 1)
-        # Generate RHS
-        for component in component_list:
-            if isinstance(component, Voltage_Source):
-                # Explicitly look up the correct matrix row using your index dictionary
-                target_idx = mna_idx[component.name]
-                b[target_idx] = component.voltage
-        """
-        # Generate RHS
-        idx = num_nodes
-        for component in component_list:
-            if isinstance(component, Voltage_Source):
-                b[idx] = component.voltage
-                idx += 1
-        """
+
+        populate_args = (component_list, graph, num_nodes, num_eqs)
         # We will be using KCL and always assuming that all currents are flowing into each node st their sum is 0
-        for component in component_list:
-            #populate current list
-            if isinstance(component, Capacitor) or isinstance(component, Inductor):
-                populate_b_current(component.i_norton,b,mna_idx)
-                populate_A_conductance(component.r_norton,A,mna_idx)
-            if isinstance(component, Current_Source):
-                # if current is positive -> flowing from node1 into node2, so we should add to eq for node 1 and subtract from eq for node2
-                populate_b_current(component,b,mna_idx)
-            # populate conductivity matrix
-            if isinstance(component, Resistor):
-                populate_A_conductance(component, A, mna_idx)
-
-            # finish KCL with currents flowing from voltage source
-            elif isinstance(component, Voltage_Source):
-                # we have defined the current as flowing from the pos term towards negative
-                populate_A_voltage(component,A,mna_idx)
-
-        A = A[0:-1, 0:-1] 
-        b = b[0:-1]
-        #print("eq b = ",b)
-
-        #print(A)
-
-        # solve system of equations
-        z = np.linalg.solve(A,b)
-        #print(z)
+        A,b,mna_idx, mna_idx_to_node, z = solve(*populate_args)
 
         node_to_voltage = {}
         node_to_voltage['0'] = 0
@@ -271,12 +238,12 @@ def MNA_time(graph, component_list, dt = 0.01, end_time = 1, plot_voltage = True
                 # determine norton equivalent current with I SC
                 # if V(t+dt) = 0
                 # I = -V(t) * C/dt
-                component.i_norton.current = (node_to_voltage[component.node1] - node_to_voltage[component.node2]) * component.capacitance/dt
+                component.i_norton.current = -(node_to_voltage[component.node1] - node_to_voltage[component.node2]) * component.capacitance/dt
                 # determine current through voltage source:
             elif(isinstance(component, Inductor)):
 
                 Vl = (node_to_voltage[component.node1] - node_to_voltage[component.node2])
-                component.i_norton.current =  -Vl * dt / component.inductance + component.i_norton.current 
+                component.i_norton.current =  Vl * dt / component.inductance + component.i_norton.current 
         
         #for i in range(num_nodes, num_eqs):
             #print("Current through Voltage Source:", mna_idx_to_node[i], "=",z[i])
