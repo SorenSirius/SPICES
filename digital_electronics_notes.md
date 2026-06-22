@@ -36,9 +36,6 @@ We have our expression for velocity as a function of time for an electron subjec
 
 The average time between collisions can be represented as 
 
-# TODO
-
-
 ## Diodes:
 Macroscopic equations:
 

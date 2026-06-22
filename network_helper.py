@@ -1,6 +1,6 @@
 # Helper functions for generating a graph to be used by the lumped circuit solver
 import re
-from models import Resistor, Voltage_Source, Current_Source, Capacitor, Inductor
+from models import Resistor, Voltage_Source, Current_Source, Capacitor, Inductor, Diode
 
 
 # Graph Assembly
@@ -47,6 +47,8 @@ def assemble_network_graph(parsed_network):
             element = Capacitor(node1, node2, *component[3:])
         elif(type.upper() == 'L'):
             element = Inductor(node1, node2, *component[3:])
+        elif(type.upper() == 'D'):
+            element = Diode(node1, node2, *component[3:])
         
         component_list.append(element)
 

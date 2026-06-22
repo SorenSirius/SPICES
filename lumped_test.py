@@ -195,7 +195,7 @@ def test_LR_decay():
 
 def test_lr_charging():
     text = """R, Vs, Vl, 1, R1
-    L, Vl, 0, 1, 1, L1
+    L, Vl, 0, 1, 0, L1
     V, Vs, 0, 5, V1
     """
     components = network_helper.parse_network(text)
@@ -209,13 +209,55 @@ def test_lr_charging():
 
     lumped.MNA_time(graph, component_list, dt, end_time)
 
+def test_lr_charging_op():
+    text = """R, Vs, Vl, 1, R1
+    L, Vl, 0, 1, 0, L1
+    V, Vs, 0, 5, V1
+    """
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+
+    dt = 0.001
+    end_time = 5
+
+    print(graph)
+    print(component_list)
+
+    lumped.MNA(graph, component_list)
+
+def diode_test():
+    text = """R, Vs, Vd, 10, R1
+    D, Vd, 0, D1
+    V, 0, Vs, 5, V1
+    """
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+
+    print(graph)
+    print(component_list)
+
+    lumped.MNA(graph, component_list, non_linear=True, tolerance=0.01)
+
+def diode_stability_test():
+    text = """D, Vd, 0, D1
+    V, 0, Vd, 0.75, V1
+    """
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+
+    print(graph)
+    print(component_list)
+
+    lumped.MNA(graph, component_list, non_linear=True, tolerance=0.01)
 #test_network_generation_MNA()
 #test_current_MNA()
-test_voltage_MNA()
+#test_voltage_MNA()
 #test_time_varrying_MNA()
 #test_plotting()
 #exp_decay_cap_test()
 #test_RLC_basic()
 #test_LR_decay()
 #test_LC_basic()
-#test_lr_charging()
+#test_lr_charging_op()
+diode_test()
+#diode_stability_test()

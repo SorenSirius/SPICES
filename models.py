@@ -1,4 +1,5 @@
 from math import exp
+from print_utils import format_num
 
 class Component:
     def __init__(self, node1, node2, name):
@@ -11,14 +12,14 @@ class Resistor(Component):
         super().__init__(node1, node2, name)
         self.resistance = float(resistance)
     def __repr__(self):
-        return f"{self.node1} - {self.node2} {self.resistance}R"
+        return f"{self.node1} - {self.node2} {format_num(self.resistance)}R"
 
 class Voltage_Source(Component):
     def __init__(self, node1, node2, voltage, name):
         super().__init__(node1, node2, name)
         self.voltage = float(voltage)
     def __repr__(self):
-        return f"+{self.node1} -> -{self.node2} {self.voltage}V"
+        return f"+{self.node1} -> -{self.node2} {format_num(self.voltage)}V"
 
 class Current_Source(Component):
     #current flowing fom node1 into node2
@@ -26,7 +27,7 @@ class Current_Source(Component):
         super().__init__(node1, node2, name)
         self.current = float(current)
     def __repr__(self):
-        return f"{self.node1} - {self.node2} {self.current}A"
+        return f"{self.node1} - {self.node2} {format_num(self.current)}A"
 
 class Capacitor(Component):
     """
@@ -39,22 +40,23 @@ class Capacitor(Component):
         super().__init__(node1, node2, name)
         self.capacitance = float(capacitance)
         self.voltage = float(voltage)
-    def init_norton(self, dt):
+    def init_norton(self, dt=0.01):
         self.r_norton = Resistor(self.node1, self.node2, dt/self.capacitance, self.name+"_n_R")
         self.i_norton = Current_Source(self.node1, self.node2, self.voltage/self.r_norton.resistance, self.name + "_n_i")
     def __repr__(self):
-        return f"{self.node1} - {self.node2} {self.capacitance}F"
+        return f"{self.node1} - {self.node2} {format_num(self.capacitance)}F"
 
 class Inductor(Component):
     def __init__(self, node1, node2, inductance, current, name):
         super().__init__(node1, node2, name)
         self.inductance = float(inductance)
         self.current = float(current)
-    def init_norton(self, dt):
+    def init_norton(self, dt=0.01):
         self.r_norton = Resistor(self.node1, self.node2, self.inductance/dt, self.name+"_n_R")
         self.i_norton = Current_Source(self.node1, self.node2, self.current, self.name + "_n_i")
     def __repr__(self):
-        return f"{self.node1} - {self.node2} {self.inductance}L"
+        return f"{self.node1} - {self.node2} {format_num(self.inductance)}L"
+
 """
 The diode component uses a norton equivalent and the newton-raphson method 
 to converge on a solution
@@ -76,17 +78,20 @@ between our guess at the resulting voltage across the diode.
 class Diode(Component):
     # Reference page 1488 of microelectronic circuits
     # Vt = 25.85mV
-    def __init__(self, node1, node2, I_sat, thermal_voltage, voltage, name, v_guess = 0.7):
-        super().__init__(node1, node2, name, v_guess)
+    def __init__(self, node1, node2, name, I_sat = 1e-15, thermal_voltage = 26e-3, v_guess = 0.7, v_change_max = 0.1):
+        super().__init__(node1, node2, name)
         self.I_sat = float(I_sat)
         self.thermal_voltage = float(thermal_voltage)
-        self.voltage = float(voltage)
         self.v_guess = float(v_guess)
+        self.voltage = v_guess
+        self.v_change_max = v_change_max
 
-    def init_norton(self):
-        self.g_norton = (self.v_guess*self.I_sat*exp(self.v_guess/self.thermal_v_guess))
-        self.r_norton = 1/self.g_norton
-        self.i_norton = self.I_sat * (exp(self.v_guess/self.thermal_v_guess)-1) - self.v_guess * self.g_norton
+    def compute_norton(self):
+        #TODO use other models for when the diode is in breakdown
+        self.g_norton = ((1/self.thermal_voltage)*self.I_sat*exp(self.v_guess/self.thermal_voltage))
+        self.r_norton = Resistor(self.node1, self.node2, 1/self.g_norton, self.name+"_n_R")
+        current = self.I_sat * (exp(self.v_guess/self.thermal_voltage)) - self.v_guess * self.g_norton
+        self.i_norton = Current_Source(self.node1, self.node2, current, self.name + "_n_i")
 
     def __repr__(self):
-        return f"{self.node1} - {self.node2} {self.voltage}V"
+        return f"{self.node1} - {self.node2} {format_num(self.voltage)}V"
