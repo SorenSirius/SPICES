@@ -145,8 +145,8 @@ def exp_decay_cap_test():
     plt.show()
 
 def test_LC_basic():
-    text = """C, 0, Vl, 1, 0, C1
-    L, Vl, 0, 1, 1, L1
+    text = """C, 0, Vl, 1, 1, C1
+    L, Vl, 0, 1, 0, L1
     """
     #R, Vc, 0, 1000, R"""
 
@@ -250,6 +250,25 @@ def diode_stability_test():
 
     lumped.MNA(graph, component_list, non_linear=True, tolerance=0.01)
 
+def test_LCD():
+    text = """C, 0, Vl, 1, 10, C1
+    L, Vl, Vd, 1, 0, L1
+    D, Vd, 0, D1
+    """
+    #R, Vc, 0, 1000, R"""
+
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+
+    print(graph)
+    print(component_list)
+
+    dt = 0.01
+    end_time = 10
+    voltage_history = lumped.MNA_time(graph, component_list, dt, end_time, plot_voltage = True)
+    vl = voltage_history['Vl']
+    time = np.arange(0,end_time+dt,dt)
+
 #test_network_generation_MNA()
 #test_current_MNA()
 #test_voltage_MNA()
@@ -258,7 +277,8 @@ def diode_stability_test():
 #exp_decay_cap_test()
 #test_RLC_basic()
 #test_LR_decay()
-test_LC_basic()
+#test_LC_basic()
 #test_lr_charging_op()
 #diode_test()
 #diode_stability_test()
+test_LCD()
