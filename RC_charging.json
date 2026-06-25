@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "parameters": {
+    "dt": "0.001",
+    "t_end": "5.0",
+    "tolerance": "0"
+  },
+  "components": [
+    {
+      "type": "V",
+      "params": "5, V1",
+      "x": 219.0,
+      "y": 452.0,
+      "rotation": 270.0
+    },
+    {
+      "type": "R",
+      "params": "1000, R1",
+      "x": 272.0,
+      "y": 295.0,
+      "rotation": 0.0
+    },
+    {
+      "type": "C",
+      "params": "0.001, 0, C1",
+      "x": 394.0,
+      "y": 392.0,
+      "rotation": 90.0
+    },
+    {
+      "type": "G",
+      "params": "",
+      "x": 350.0,
+      "y": 490.0,
+      "rotation": 0.0
+    }
+  ],
+  "wires": [
+    {
+      "start": {
+        "comp": 2,
+        "term": 1
+      },
+      "end": {
+        "comp": 3,
+        "term": 0
+      }
+    },
+    {
+      "start": {
+        "comp": 2,
+        "term": 0
+      },
+      "end": {
+        "comp": 1,
+        "term": 1
+      }
+    },
+    {
+      "start": {
+        "comp": 1,
+        "term": 0
+      },
+      "end": {
+        "comp": 0,
+        "term": 1
+      }
+    },
+    {
+      "start": {
+        "comp": 0,
+        "term": 0
+      },
+      "end": {
+        "comp": 3,
+        "term": 0
+      }
+    }
+  ],
+  "netlist_text": "V, 0, N1, 5, V1\nR, N1, N2, 1000, R1\nC, N2, 0, 0.001, 0, C1"
+}

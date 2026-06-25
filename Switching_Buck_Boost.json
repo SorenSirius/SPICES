@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "parameters": {
+    "dt": "0.001",
+    "t_end": "5.0",
+    "tolerance": "0.01"
+  },
+  "components": [
+    {
+      "type": "V",
+      "params": "5, V1",
+      "x": 220.0,
+      "y": 420.0,
+      "rotation": 270.0
+    },
+    {
+      "type": "S",
+      "params": "S1",
+      "x": 355.0,
+      "y": 314.0,
+      "rotation": 0.0
+    },
+    {
+      "type": "F",
+      "params": "F1, sin(2*pi*t)",
+      "x": 363.0,
+      "y": 433.0,
+      "rotation": 270.0
+    },
+    {
+      "type": "D",
+      "params": "D1",
+      "x": 531.0,
+      "y": 424.0,
+      "rotation": 90.0
+    },
+    {
+      "type": "L",
+      "params": "1, 0, L1",
+      "x": 649.0,
+      "y": 324.0,
+      "rotation": 0.0
+    },
+    {
+      "type": "C",
+      "params": "0.001, 0, C1",
+      "x": 735.0,
+      "y": 437.0,
+      "rotation": 90.0
+    },
+    {
+      "type": "R",
+      "params": "1000, R1",
+      "x": 885.0,
+      "y": 436.0,
+      "rotation": 90.0
+    },
+    {
+      "type": "G",
+      "params": "",
+      "x": 410.0,
+      "y": 530.0,
+      "rotation": 0.0
+    }
+  ],
+  "wires": [
+    {
+      "start": {
+        "comp": 1,
+        "term": 0
+      },
+      "end": {
+        "comp": 0,
+        "term": 1
+      }
+    },
+    {
+      "start": {
+        "comp": 1,
+        "term": 2
+      },
+      "end": {
+        "comp": 2,
+        "term": 1
+      }
+    },
+    {
+      "start": {
+        "comp": 1,
+        "term": 1
+      },
+      "end": {
+        "comp": 3,
+        "term": 0
+      }
+    },
+    {
+      "start": {
+        "comp": 3,
+        "term": 0
+      },
+      "end": {
+        "comp": 4,
+        "term": 0
+      }
+    },
+    {
+      "start": {
+        "comp": 4,
+        "term": 1
+      },
+      "end": {
+        "comp": 5,
+        "term": 0
+      }
+    },
+    {
+      "start": {
+        "comp": 5,
+        "term": 0
+      },
+      "end": {
+        "comp": 6,
+        "term": 0
+      }
+    },
+    {
+      "start": {
+        "comp": 6,
+        "term": 1
+      },
+      "end": {
+        "comp": 5,
+        "term": 1
+      }
+    },
+    {
+      "start": {
+        "comp": 5,
+        "term": 1
+      },
+      "end": {
+        "comp": 3,
+        "term": 1
+      }
+    },
+    {
+      "start": {
+        "comp": 3,
+        "term": 1
+      },
+      "end": {
+        "comp": 2,
+        "term": 0
+      }
+    },
+    {
+      "start": {
+        "comp": 2,
+        "term": 0
+      },
+      "end": {
+        "comp": 0,
+        "term": 0
+      }
+    },
+    {
+      "start": {
+        "comp": 2,
+        "term": 0
+      },
+      "end": {
+        "comp": 7,
+        "term": 0
+      }
+    }
+  ],
+  "netlist_text": "V, 0, N1, 5, V1\nS, N1, N2, N3, S1\nF, 0, N3, F1, sin(2*pi*t)\nD, N2, 0, D1\nL, N2, N4, 1, 0, L1\nC, N4, 0, 0.001, 0, C1\nR, N4, 0, 1000, R1"
+}

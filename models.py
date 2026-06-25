@@ -1,5 +1,8 @@
-from math import exp
+from math import exp,sin,cos,sqrt,pow
 from print_utils import format_num
+
+OPEN = 1e-300
+CLOSED = 1e300
 
 class Component:
     def __init__(self, node1, node2, name):
@@ -10,6 +13,7 @@ class Component:
 class Resistor(Component):
     def __init__(self, node1, node2, resistance, name):
         super().__init__(node1, node2, name)
+        self.non_linear = False
         self.resistance = float(resistance)
     def __repr__(self):
         return f"{self.node1} - {self.node2} {format_num(self.resistance)}R"
@@ -17,7 +21,28 @@ class Resistor(Component):
 class Voltage_Source(Component):
     def __init__(self, node1, node2, voltage, name):
         super().__init__(node1, node2, name)
+        self.non_linear = False
         self.voltage = float(voltage)
+    def __repr__(self):
+        return f"+{self.node1} -> -{self.node2} {format_num(self.voltage)}V"
+
+class Voltage_Function_Source(Component):
+    def __init__(self, node1, node2, name, voltage_func = lambda t: 1, t0=0):
+        super().__init__(node1, node2, name)
+        self.non_linear = False
+
+        if not callable(voltage_func):
+            raise TypeError("voltage_func must be a function of t")
+
+        self.voltage_func = voltage_func
+        self.t = float(t0)
+        self.voltage = float(self.voltage_func(self.t))
+
+    def update(self, dt):
+        """Advance time by dt and recompute voltage."""
+        self.t += float(dt)
+        self.voltage = float(self.voltage_func(self.t))
+        return self.voltage
     def __repr__(self):
         return f"+{self.node1} -> -{self.node2} {format_num(self.voltage)}V"
 
@@ -38,6 +63,7 @@ class Capacitor(Component):
     """
     def __init__(self, node1, node2, capacitance, voltage, name):
         super().__init__(node1, node2, name)
+        self.non_linear = False
         self.capacitance = float(capacitance)
         self.voltage = float(voltage)
     def init_norton(self, dt=0.01):
@@ -49,6 +75,7 @@ class Capacitor(Component):
 class Inductor(Component):
     def __init__(self, node1, node2, inductance, current, name):
         super().__init__(node1, node2, name)
+        self.non_linear = False
         self.inductance = float(inductance)
         self.current = float(current)
     def init_norton(self, dt=0.01):
@@ -80,6 +107,7 @@ class Diode(Component):
     # Vt = 25.85mV
     def __init__(self, node1, node2, name, I_sat = 1e-15, thermal_voltage = 26e-3, v_guess = 0.7, v_change_max = 0.1):
         super().__init__(node1, node2, name)
+        self.non_linear = True
         self.I_sat = float(I_sat)
         self.thermal_voltage = float(thermal_voltage)
         self.v_guess = float(v_guess)
@@ -95,3 +123,24 @@ class Diode(Component):
 
     def __repr__(self):
         return f"{self.node1} - {self.node2} {format_num(self.voltage)}V"
+
+class Switch(Component):
+    # model as an open circuit between node3 and node4 connected to ground which controls whether the switch is on or off
+    def __init__(self, node1, node2, node3, name):
+        super().__init__(node1, node2, name)
+        self.non_linear = True
+        self.node3 = node3
+        # guess that the switch is initially off
+        self.state = 0
+        self.voltage = 0
+        self.resistance = CLOSED 
+        self.switch = Resistor(node3, '0', 1e300, self.name+"_s_R")
+    def update_state(self):
+        if self.voltage > 0:
+            self.state = 1
+            self.resistance = OPEN
+        else: 
+            self.state = 0
+            self.resistance = CLOSED
+    def __repr__(self):
+        return f"{self.node1} - {self.node2} State: {self.state}"

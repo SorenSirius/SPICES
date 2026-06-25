@@ -157,12 +157,9 @@ def test_LC_basic():
     print(component_list)
 
     dt = 0.01
-    end_time = 10
+    end_time = 100
     voltage_history = lumped.MNA_time(graph, component_list, dt, end_time, plot_voltage = True)
-    vl = voltage_history['Vl']
-    time = np.arange(0,end_time+dt,dt)
-    analytical = np.cos(time)
-    #plot_computed_analytical(vl,analytical,dt)
+
 
 def test_RLC_basic():
     text = """C, Vc, Vl, 1, 1, C1
@@ -269,6 +266,48 @@ def test_LCD():
     vl = voltage_history['Vl']
     time = np.arange(0,end_time+dt,dt)
 
+def test_voltage_function_source():
+    text = """R, N1, 0, 1000, R1
+    F, N1, 0, V1, sin(2*pi*t)"""
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+    dt = 0.01
+    end_time = 10
+    lumped.MNA_time(graph, component_list, dt, end_time, plot_voltage = True)
+
+def test_rectifier():
+    text = """R, N1, 0, 1000, R1
+    F, N1, 0, V1, sin(2*pi*t)
+    D, N1, 0, D1"""
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+    dt = 0.01
+    end_time = 10
+    lumped.MNA_time(graph, component_list, dt, end_time, plot_voltage = True)
+
+def diode_op_transient():
+    text = """V, 0, N1, 5, V1
+    R, N1, N2, 1000, R1
+    D, N2, 0, D1"""
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+    dt = 0.01
+    end_time = 10
+    # 0.891 steady state diode voltage
+    lumped.MNA_time(graph, component_list, dt, end_time, plot_voltage = True, tolerance = 0.01)
+    # 0.764 operating point
+    lumped.MNA(graph, component_list)
+
+def test_todo_printed_components():
+    text = """S, N1, N2, N3, S1
+    F, 0, N3, F1, sin(2*pi*t)
+    V, 0, N1, 5, V1
+    R, N2, 0, 1000, R1"""
+    components = network_helper.parse_network(text)
+    graph, component_list = network_helper.assemble_network_graph(components)
+    dt = 0.01
+    end_time = 0.05 
+    lumped.MNA_time(graph, component_list, dt, end_time, plot_voltage=True, tolerance=0.01)
 #test_network_generation_MNA()
 #test_current_MNA()
 #test_voltage_MNA()
@@ -281,4 +320,9 @@ def test_LCD():
 #test_lr_charging_op()
 #diode_test()
 #diode_stability_test()
-test_LCD()
+#test_LCD()
+#test_voltage_function_source()
+#test_rectifier()
+#diode_op_transient()
+
+test_todo_printed_components()

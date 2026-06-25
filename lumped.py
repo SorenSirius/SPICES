@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import network_helper
-from models import Resistor, Voltage_Source, Current_Source, Capacitor, Inductor, Diode
+from models import *
 from print_utils import format_num, format_array
 from collections import defaultdict
 from math import log, exp
@@ -35,8 +35,9 @@ def populate(component_list, graph, num_nodes, num_eqs):
     b = np.zeros(num_eqs + 1)
 
     idx = num_nodes
+    #populate resultant vector with driving voltages ie Va = Vs
     for component in component_list:
-        if isinstance(component, Voltage_Source):
+        if isinstance(component, Voltage_Source) or isinstance(component, Voltage_Function_Source):
             b[idx] = component.voltage
             idx += 1
         
@@ -46,14 +47,14 @@ def populate(component_list, graph, num_nodes, num_eqs):
     # map nodes to indicies on the A matrix
     for node in graph:
         if node == '0':
-            mna_idx[node] = num_eqs
+            mna_idx[node] = num_eqs #throw away ground
         else:
             mna_idx[node] = idx
             mna_idx_to_node[idx] = node
             idx += 1
 
     for component in component_list:
-        if isinstance(component, Voltage_Source):
+        if isinstance(component, Voltage_Source) or isinstance(component, Voltage_Function_Source):
             mna_idx[component.name] = idx
             mna_idx_to_node[idx] = component.name
             idx += 1
@@ -75,8 +76,12 @@ def populate(component_list, graph, num_nodes, num_eqs):
         if isinstance(component, Resistor):
             populate_A_conductance(component, A, mna_idx)
 
+        if isinstance(component, Switch):
+            populate_A_conductance(component, A, mna_idx)
+            populate_A_conductance(component.switch, A, mna_idx)
+
         # finish KCL with currents flowing from voltage source
-        elif isinstance(component, Voltage_Source):
+        elif isinstance(component, Voltage_Source) or isinstance(component, Voltage_Function_Source):
             # we have defined the current as flowing from the pos term towards negative
             #print(component.node1, component.node2, "=", format_num(component.voltage))
             populate_A_voltage(component, A, mna_idx)
@@ -92,6 +97,12 @@ def update_diode(mna_idx, diode, z):
     diode.v_guess = max(diode.v_guess - diode.v_change_max, min(diode.v_guess+diode.v_change_max, diode.voltage))
     return error
 
+def update_switch(mna_idx, switch, z):
+    z_grounded = np.pad(z, (0, 1), mode='constant')
+    switch.voltage = z_grounded[mna_idx[switch.node3]]
+    switch.update_state()
+    #print(f"Switch Voltage {switch.voltage}, switch state: {switch.state}, switch resistor{switch.resistance}")
+    return switch.voltage
 """
 On the first pass, this function will compute the norton equivalent for all diodes with the given guess voltage.
 
@@ -105,6 +116,7 @@ Diodes are linear in terms of time but nonlinear in terms of voltage, so it make
 """
 def solve_non_linear(component_list, graph, num_nodes, num_eqs, tolerance):
     loops = 0
+    A,b,mna_idx, mna_idx_to_node = populate(component_list, graph, num_nodes, num_eqs)
     while(True):
         error = tolerance + 1
         diode = None
@@ -115,8 +127,15 @@ def solve_non_linear(component_list, graph, num_nodes, num_eqs, tolerance):
                 if(loops > 0):
                     error = update_diode(mna_idx, component, z)
                 component.compute_norton()
+                populate_b_current(component.i_norton,b,mna_idx)
+                populate_A_conductance(component.r_norton,A,mna_idx)
+            
+            elif isinstance(component, Switch):
+                if(loops > 0):
+                    update_switch(mna_idx, component, z)
+                    populate_A_conductance(component, A, mna_idx)
+                    populate_A_conductance(component.switch, A, mna_idx)
 
-        A,b,mna_idx, mna_idx_to_node = populate(component_list, graph, num_nodes, num_eqs)
         
         A_no_ground = A[0:-1, 0:-1] 
         b_no_ground = b[0:-1]
@@ -128,7 +147,12 @@ def solve_non_linear(component_list, graph, num_nodes, num_eqs, tolerance):
         loops += 1
 
 def solve(component_list, graph, num_nodes, num_eqs, tolerance = 0):
-    if(tolerance):
+    non_linear = False
+    for component in component_list:
+        if(component.non_linear == True):
+            non_linear = True
+
+    if(non_linear):
         return solve_non_linear(component_list, graph, num_nodes, num_eqs, tolerance)
     
     else:
@@ -181,7 +205,7 @@ def MNA(graph, component_list, non_linear = False, tolerance = 0.01):
         print("Current through Voltage Source:", mna_idx_to_node[i], f"= {format_num(z[i])}")
 
 #Extending MNA to time varying circuits?
-def MNA_time(graph, component_list, dt = 0.01, end_time = 1, plot_voltage = True):
+def MNA_time(graph, component_list, dt = 0.01, end_time = 1, plot_voltage = True, tolerance = 0):
     #uses the form Ax = b where A is a matrix generated by KCL at each node combined with KVL for each voltage source
 
     # initialize capacitors/inductors for simulation
@@ -214,7 +238,7 @@ def MNA_time(graph, component_list, dt = 0.01, end_time = 1, plot_voltage = True
 
         populate_args = (component_list, graph, num_nodes, num_eqs)
         # We will be using KCL and always assuming that all currents are flowing into each node st their sum is 0
-        A,b,mna_idx, mna_idx_to_node, z = solve(*populate_args)
+        A,b,mna_idx, mna_idx_to_node, z = solve(*populate_args, tolerance)
 
         node_to_voltage = {}
         node_to_voltage['0'] = 0
@@ -226,27 +250,18 @@ def MNA_time(graph, component_list, dt = 0.01, end_time = 1, plot_voltage = True
             node_to_voltage[node] = voltage
             voltage_history[node].append(voltage)
 
-        #find the voltage across capacitors:
+        #simple euler method
         for component in component_list:
-            if(isinstance(component, Capacitor)):
-                #breakpoint()
-                #update norton equivalent circuit for the capacitor
-                # C = Q/V
-                # C * dV/dt = I
-                # V'(t) = 1/C * I
-                # V(t+dt) = V(t) + 1/C * I * dt
-                # determine norton equivalent current with I SC
-                # if V(t+dt) = 0
-                # I = -V(t) * C/dt
-                component.i_norton.current = -(node_to_voltage[component.node1] - node_to_voltage[component.node2]) * component.capacitance/dt
-                # determine current through voltage source:
-            elif(isinstance(component, Inductor)):
+            if(isinstance(component, Voltage_Function_Source)):
+                component.update(dt)
 
+            elif(isinstance(component, Capacitor)):
+                Vc = node_to_voltage[component.node1] - node_to_voltage[component.node2]
+                component.i_norton.current = -Vc * component.capacitance/dt
+
+            elif(isinstance(component, Inductor)):
                 Vl = (node_to_voltage[component.node1] - node_to_voltage[component.node2])
                 component.i_norton.current =  Vl * dt / component.inductance + component.i_norton.current 
-        
-        #for i in range(num_nodes, num_eqs):
-            #print("Current through Voltage Source:", mna_idx_to_node[i], "=",z[i])
         
         time += dt
 

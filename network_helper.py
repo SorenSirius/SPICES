@@ -1,6 +1,8 @@
 # Helper functions for generating a graph to be used by the lumped circuit solver
 import re
-from models import Resistor, Voltage_Source, Current_Source, Capacitor, Inductor, Diode
+from models import *
+import math
+from math import *
 
 
 # Graph Assembly
@@ -9,13 +11,27 @@ def parse_network(text):
     parsed_data = []
 
     for component in components:
-        tokens = re.split(r'[ ,]+', component.strip())
-        
+        line = component.split('#', 1)[0].split(';', 1)[0].strip()
+        if not line:
+            continue
+
+        tokens = re.split(r'[ ,]+', line)
         tokens = [t for t in tokens if t]
-        
-        parsed_data.append(tokens)
+        if tokens:
+            parsed_data.append(tokens)
         
     return parsed_data
+
+def text_to_lambda(text):
+    namespace = {
+        "__builtins__": {},
+        **{
+            name: getattr(math, name)
+            for name in dir(math)
+            if not name.startswith("_")
+        }
+    }
+    return eval(f"lambda t: {text}", namespace)
 
 def assemble_network_graph(parsed_network):
     '''
@@ -49,6 +65,10 @@ def assemble_network_graph(parsed_network):
             element = Inductor(node1, node2, *component[3:])
         elif(type.upper() == 'D'):
             element = Diode(node1, node2, *component[3:])
+        elif(type.upper() == 'F'):
+            element = Voltage_Function_Source(node1, node2, component[3], text_to_lambda(component[4]))
+        elif(type.upper() == 'S'):
+            element = Switch(node1, node2, component[3], component[4])
         
         component_list.append(element)
 
@@ -69,7 +89,7 @@ def assemble_network_graph(parsed_network):
 def count_voltages(component_list):
     num_voltages = 0
     for component in component_list:
-        if isinstance(component, Voltage_Source):
+        if isinstance(component, Voltage_Source) or isinstance(component, Voltage_Function_Source):
             num_voltages += 1
 
     return num_voltages

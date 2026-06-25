@@ -1,4 +1,6 @@
+#TODO -> add incator for positive and negative terminal of components
 import sys
+import json
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtWidgets import (
@@ -7,7 +9,7 @@ from PyQt6.QtWidgets import (
     QGraphicsLineItem, QGraphicsTextItem, QInputDialog, QPlainTextEdit,
     QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout, QLineEdit,
     QDialog, QFormLayout, QDialogButtonBox, QGroupBox, QMessageBox,
-    QStatusBar, QFrame, QSizePolicy
+    QStatusBar, QFrame, QSizePolicy, QFileDialog
 )
 from PyQt6.QtGui import (
     QAction, QKeySequence, QPen, QBrush, QColor, QFont, QPainter,
@@ -17,6 +19,7 @@ from PyQt6.QtCore import Qt, QRectF, QPointF, QLineF, QTimer
 
 import network_helper
 import lumped
+from models import Diode
 
 
 # ── Palette ──────────────────────────────────────────────────────────────────
@@ -40,20 +43,24 @@ CLR_GRID        = "#262b36"
 
 COMP_COLORS = {
     'V': ("#1a3a2a", "#3dd68c"),
+    'F': ("#1a3a2a", "#3dd68c"),
     'I': ("#1a2a3a", "#4f8ef7"),
     'R': ("#2a2a1a", "#f7b731"),
     'C': ("#2a1a3a", "#7c5ef7"),
     'L': ("#3a1a1a", "#f74f4f"),
     'D': ("#1a3a3a", "#3dd6d6"),
+    'S': ("#2a2a3a", "#f74f4f"),
 }
 
 COMP_SYMBOLS = {
     'V': 'V',
+    'F': 'F',
     'I': 'I',
     'R': 'R',
     'C': 'C',
     'L': 'L',
     'D': 'D',
+    'S': 'S',
 }
 
 
@@ -82,6 +89,11 @@ class ComponentDialog(QDialog):
             self.fields['name']  = QLineEdit(parts[1] if len(parts) > 1 else "V1")
             form.addRow("Voltage (V):", self.fields['value'])
             form.addRow("Name:",        self.fields['name'])
+        elif comp_type == 'F':
+            self.fields['function'] = QLineEdit(parts[1] if len(parts) > 1 else "sin(2*pi*t)")
+            self.fields['name']     = QLineEdit(parts[0] if len(parts) > 0 else "F1")
+            form.addRow("Function (t):", self.fields['function'])
+            form.addRow("Name:",         self.fields['name'])
         elif comp_type == 'I':
             self.fields['value'] = QLineEdit(parts[0] if len(parts) > 0 else "1")
             self.fields['name']  = QLineEdit(parts[1] if len(parts) > 1 else "I1")
@@ -110,6 +122,9 @@ class ComponentDialog(QDialog):
             self._add_hint(layout, "Initial current sets inductor flux at t=0.")
         elif comp_type == 'D':
             self.fields['name'] = QLineEdit(parts[0] if len(parts) > 0 else "D1")
+            form.addRow("Name:", self.fields['name'])
+        elif comp_type == 'S':
+            self.fields['name'] = QLineEdit(parts[0] if len(parts) > 0 else "S1")
             form.addRow("Name:", self.fields['name'])
 
         layout.addLayout(form)
@@ -147,6 +162,8 @@ class ComponentDialog(QDialog):
     def get_params(self):
         ct = self.comp_type
         f  = self.fields
+        if ct == 'F':
+            return f"{f['name'].text()}, {f['function'].text()}"
         if ct in ('V', 'I'):
             return f"{f['value'].text()}, {f['name'].text()}"
         if ct == 'R':
@@ -156,6 +173,8 @@ class ComponentDialog(QDialog):
         if ct == 'L':
             return f"{f['value'].text()}, {f['i_init'].text()}, {f['name'].text()}"
         if ct == 'D':
+            return f"{f['name'].text()}"
+        if ct == 'S':
             return f"{f['name'].text()}"
         return ""
 
@@ -207,21 +226,49 @@ class ComponentItem(QGraphicsRectItem):
         sym_w = self.sym_label.boundingRect().width()
         self.sym_label.setPos((self.W - sym_w) / 2, 4)
 
+        if comp_type in ('V', 'I', 'D', 'F'):
+            plus = QGraphicsTextItem("+", self)
+            minus = QGraphicsTextItem("-", self)
+            plus.setDefaultTextColor(QColor(border))
+            minus.setDefaultTextColor(QColor(border))
+            plus.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+            minus.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+            plus.setZValue(3)
+            minus.setZValue(3)
+            plus_rect = plus.boundingRect()
+            minus_rect = minus.boundingRect()
+            if comp_type in ('V', 'I', 'F'):
+                # For sources, place + at the right terminal and - at the left terminal
+                minus.setPos(8, (self.H - minus_rect.height()) / 2)
+                plus.setPos(self.W - plus_rect.width() - 8, (self.H - plus_rect.height()) / 2)
+            else:
+                # Diode: + at the anode side (left), - at the cathode side (right)
+                plus.setPos(8, (self.H - plus_rect.height()) / 2)
+                minus.setPos(self.W - minus_rect.width() - 8, (self.H - minus_rect.height()) / 2)
+
         self.params = self._default_params(comp_type)
 
         # Terminals at left-centre and right-centre in LOCAL space
         self.t1 = Terminal(self, 0,      self.H / 2)
         self.t2 = Terminal(self, self.W, self.H / 2)
-        scene_ref.terminals.extend([self.t1, self.t2])
+        self.terminals = [self.t1, self.t2]
+
+        if comp_type == 'S':
+            self.t3 = Terminal(self, self.W / 2, self.H)
+            self.terminals.append(self.t3)
+
+        scene_ref.terminals.extend(self.terminals)
 
     def _default_params(self, t):
         return {
             'V': "5, V1",
+            'F': "F1, sin(2*pi*t)",
             'I': "1, I1",
             'R': "1000, R1",
             'C': "0.001, 0, C1",
             'L': "1, 0, L1",
             'D': "D1",
+            'S': "S1",
         }.get(t, "Params")
 
     def mouseDoubleClickEvent(self, event):
@@ -241,13 +288,13 @@ class ComponentItem(QGraphicsRectItem):
         self.setTransformOriginPoint(self.W / 2, self.H / 2)
         self.setRotation(self._rot)
         # Wire endpoints must be recalculated now that terminal scene-positions changed
-        for t in (self.t1, self.t2):
+        for t in self.terminals:
             for w in t.wires:
                 w.update_position()
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            for t in (self.t1, self.t2):
+            for t in self.terminals:
                 for w in t.wires:
                     w.update_position()
         return super().itemChange(change, value)
@@ -296,6 +343,7 @@ class WireItem(QGraphicsLineItem):
                    Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
         self.setPen(pen)
         self.setZValue(2)
+        self.setFlag(QGraphicsLineItem.GraphicsItemFlag.ItemIsSelectable)
         self.start_terminal = start_terminal
         self.end_terminal   = None
         self.start_terminal.wires.append(self)
@@ -306,12 +354,21 @@ class WireItem(QGraphicsLineItem):
             p2 = self.end_terminal.scenePos()
             self.setLine(QLineF(p1, p2))
 
+    def paint(self, painter, option, widget=None):
+        if self.isSelected():
+            sel_pen = QPen(QColor(CLR_ACCENT), 3, Qt.PenStyle.SolidLine,
+                          Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(sel_pen)
+        else:
+            painter.setPen(self.pen())
+        painter.drawLine(self.line())
+
 
 # ── Scene ─────────────────────────────────────────────────────────────────────
 class SchematicScene(QGraphicsScene):
     SNAP = 10
 
-    def __init__(self, status_callback=None):
+    def __init__(self, status_callback=None, component_callback=None):
         super().__init__()
         self.setSceneRect(0, 0, 1200, 900)
         self.setBackgroundBrush(QBrush(QColor(CLR_BG)))
@@ -322,6 +379,7 @@ class SchematicScene(QGraphicsScene):
         self.is_wiring    = False
         self.current_wire = None
         self._status      = status_callback or (lambda msg: None)
+        self._component_callback = component_callback or (lambda comp: None)
 
     def _snap(self, pos):
         s = self.SNAP
@@ -344,7 +402,9 @@ class SchematicScene(QGraphicsScene):
         self.is_wiring = False
         if self.current_wire:
             self._cancel_wire()
-        if mode:
+        if mode == "Select":
+            self._status("Mode: Select  —  click a component or wire terminal to select  |  Esc to cancel")
+        elif mode:
             self._status(f"Mode: {mode}  —  click canvas to place  |  Esc to cancel")
         else:
             self._status("Ready  —  select a tool from the toolbar")
@@ -406,14 +466,26 @@ class SchematicScene(QGraphicsScene):
                 self._status("Wiring — release on another terminal to connect  |  Esc to cancel")
             return
 
+        if self.current_mode == "Select":
+            term = self._terminal_at(pos)
+            if term and term.wires:
+                self.clearSelection()
+                wire = term.wires[0]
+                wire.setSelected(True)
+                self._status("Wire selected — press Del to delete")
+                return
+            # Let normal selection behavior handle components and empty clicks
+
         type_map = {
-            "Voltage Source": 'V', "Current Source": 'I',
+            "Voltage Source": 'V', "Function Source": 'F', "Current Source": 'I',
             "Resistor": 'R', "Capacitor": 'C', "Inductor": 'L', "Diode": 'D',
+            "Switch": 'S',
         }
         if self.current_mode in type_map:
             comp = ComponentItem(type_map[self.current_mode], spos, self)
             self.addItem(comp)
             self.components.append(comp)
+            self._component_callback(comp)
             self.set_mode(None)
             return
 
@@ -534,7 +606,11 @@ class SchematicScene(QGraphicsScene):
             if isinstance(comp, ComponentItem):
                 n1 = node_names.get(comp.t1, '?')
                 n2 = node_names.get(comp.t2, '?')
-                lines.append(f"{comp.comp_type}, {n1}, {n2}, {comp.params}")
+                if comp.comp_type == 'S':
+                    n3 = node_names.get(comp.t3, '?')
+                    lines.append(f"{comp.comp_type}, {n1}, {n2}, {n3}, {comp.params}")
+                else:
+                    lines.append(f"{comp.comp_type}, {n1}, {n2}, {comp.params}")
 
         return "\n".join(lines)
 
@@ -585,7 +661,8 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         self.status.showMessage("Ready  —  select a tool from the toolbar")
 
-        self.scene = SchematicScene(status_callback=self.status.showMessage)
+        self.scene = SchematicScene(status_callback=self.status.showMessage,
+                                    component_callback=self._on_component_placed)
         self.view  = QGraphicsView(self.scene)
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.view.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
@@ -602,6 +679,15 @@ class MainWindow(QMainWindow):
         self._setup_plot_dock()
 
         self.view.wheelEvent = self._wheel_zoom
+
+    def _on_component_placed(self, comp):
+        if getattr(comp, 'comp_type', None) == 'D':
+            try:
+                tol = float(self.tolerance_input.text())
+            except ValueError:
+                tol = 0.0
+            if tol == 0.0:
+                self.tolerance_input.setText('0.01')
 
     def _apply_global_style(self):
         self.setStyleSheet(f"""
@@ -655,13 +741,21 @@ class MainWindow(QMainWindow):
             tb.addWidget(lbl)
 
         sep("Sources")
-        for name, key, mode in [("Voltage", "V", "Voltage Source"), ("Current", "I", "Current Source")]:
+        for name, key, mode in [("Voltage", "V", "Voltage Source"), ("Function", "F", "Function Source"), ("Current", "I", "Current Source")]:
             act = QAction(name, self)
             act.setCheckable(True)
             act.setShortcut(QKeySequence(key))
             act.triggered.connect(lambda chk, m=mode: self._set_mode(m))
             tb.addAction(act)
             self._tool_actions[mode] = act
+
+        tb.addSeparator(); sep("Tools")
+        act = QAction("Select", self)
+        act.setCheckable(True)
+        act.setShortcut(QKeySequence("S"))
+        act.triggered.connect(lambda chk, m="Select": self._set_mode(m))
+        tb.addAction(act)
+        self._tool_actions["Select"] = act
 
         tb.addSeparator(); sep("Passives")
         for name, key, mode in [("Resistor","R","Resistor"),("Capacitor","C","Capacitor"),("Inductor","L","Inductor")]:
@@ -673,7 +767,7 @@ class MainWindow(QMainWindow):
             self._tool_actions[mode] = act
 
         tb.addSeparator(); sep("Semi")
-        for name, key, mode in [("Diode","D","Diode")]:
+        for name, key, mode in [("Diode","D","Diode"), ("Switch","X","Switch")]:
             act = QAction(name, self)
             act.setCheckable(True)
             act.setShortcut(QKeySequence(key))
@@ -691,7 +785,7 @@ class MainWindow(QMainWindow):
             self._tool_actions[mode] = act
 
         tb.addSeparator()
-        hint = QLabel("   R = rotate selected  |  Del = delete  |  Scroll = zoom")
+        hint = QLabel("   S = select  |  R = rotate selected  |  Del = delete  |  Scroll = zoom")
         hint.setStyleSheet(f"color: {CLR_TEXT_MUTED}; font-size: 11px;")
         tb.addWidget(hint)
 
@@ -703,7 +797,7 @@ class MainWindow(QMainWindow):
         # Rubber-band drag conflicts with click-to-place; disable it while a tool is active
         if mode in ("Wire",):
             self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
-        elif mode is None:
+        elif mode in (None, "Select"):
             self.view.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         else:
             self.view.setDragMode(QGraphicsView.DragMode.NoDrag)
@@ -736,14 +830,23 @@ class MainWindow(QMainWindow):
         btn_compile.clicked.connect(self.compile_canvas)
         layout.addWidget(btn_compile)
 
+        btn_save = make_button("💾 Save Schematic", CLR_SURFACE2, CLR_TEXT)
+        btn_save.clicked.connect(self.save_project)
+        layout.addWidget(btn_save)
+
+        btn_load = make_button("📂 Load Schematic", CLR_SURFACE2, CLR_TEXT)
+        btn_load.clicked.connect(self.load_project)
+        layout.addWidget(btn_load)
+
         layout.addWidget(self._divider())
         section("SIMULATION PARAMETERS")
 
         grid = QHBoxLayout()
         grid.setSpacing(6)
         for lbl_text, attr, default, width in [
-            ("dt (s)",     "dt_input",       "0.001", 72),
-            ("t_end (s)",  "end_time_input", "5.0",   72),
+            ("dt (s)",        "dt_input",       "0.001", 72),
+            ("t_end (s)",     "end_time_input", "5.0",   72),
+            ("Tolerance",     "tolerance_input", "0",     72),
         ]:
             lbl = QLabel(lbl_text)
             lbl.setFixedWidth(52)
@@ -816,22 +919,152 @@ class MainWindow(QMainWindow):
         self.text_editor.setPlainText(nl)
         self.status.showMessage(f"Netlist compiled — {len(nl.splitlines())} component(s)")
 
+    def save_project(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Save Schematic", "", "Circuit Files (*.json);;All Files (*)")
+        if not path:
+            return
+        state = self._serialize_scene()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=2)
+            self.status.showMessage(f"Saved schematic to {path}")
+        except Exception as e:
+            self.status.showMessage(f"Save failed: {e}")
+
+    def load_project(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Load Schematic", "", "Circuit Files (*.json);;All Files (*)")
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            self._deserialize_scene(state)
+            self.status.showMessage(f"Loaded schematic from {path}")
+        except Exception as e:
+            self.status.showMessage(f"Load failed: {e}")
+
+    def _serialize_scene(self):
+        components = []
+        for item in self.scene.components:
+            if isinstance(item, ComponentItem):
+                components.append({
+                    "type": item.comp_type,
+                    "params": item.params,
+                    "x": item.pos().x(),
+                    "y": item.pos().y(),
+                    "rotation": item.rotation(),
+                })
+            elif isinstance(item, GroundItem):
+                components.append({
+                    "type": "G",
+                    "params": "",
+                    "x": item.pos().x(),
+                    "y": item.pos().y(),
+                    "rotation": item.rotation(),
+                })
+
+        terminal_map = {}
+        for comp_index, item in enumerate(self.scene.components):
+            terms = item.terminals if isinstance(item, ComponentItem) else [item.t1]
+            for term_index, term in enumerate(terms):
+                terminal_map[term] = {"comp": comp_index, "term": term_index}
+
+        wires = []
+        for wire in self.scene.wires:
+            if wire.start_terminal and wire.end_terminal:
+                start = terminal_map.get(wire.start_terminal)
+                end = terminal_map.get(wire.end_terminal)
+                if start is not None and end is not None:
+                    wires.append({
+                        "start": start,
+                        "end": end,
+                    })
+
+        return {
+            "version": 1,
+            "parameters": {
+                "dt": self.dt_input.text(),
+                "t_end": self.end_time_input.text(),
+                "tolerance": self.tolerance_input.text(),
+            },
+            "components": components,
+            "wires": wires,
+            "netlist_text": self.text_editor.toPlainText(),
+        }
+
+    def _clear_scene(self):
+        for item in list(self.scene.items()):
+            self.scene.removeItem(item)
+        self.scene.components.clear()
+        self.scene.terminals.clear()
+        self.scene.wires.clear()
+        self.scene.current_wire = None
+        self.scene.set_mode(None)
+
+    def _deserialize_scene(self, state):
+        self._clear_scene()
+        for comp_state in state.get("components", []):
+            pos = QPointF(comp_state.get("x", 0), comp_state.get("y", 0))
+            comp_type = comp_state.get("type", "")
+            if comp_type == "G":
+                item = GroundItem(pos, self.scene)
+            else:
+                item = ComponentItem(comp_type, pos, self.scene)
+                item.params = comp_state.get("params", item.params)
+                item.setRotation(comp_state.get("rotation", 0))
+            self.scene.addItem(item)
+            self.scene.components.append(item)
+
+        for wire_state in state.get("wires", []):
+            start_ref = wire_state.get("start", {})
+            end_ref = wire_state.get("end", {})
+            try:
+                start_item = self.scene.components[start_ref["comp"]]
+                end_item = self.scene.components[end_ref["comp"]]
+                start_term = (start_item.terminals if isinstance(start_item, ComponentItem) else [start_item.t1])[start_ref["term"]]
+                end_term = (end_item.terminals if isinstance(end_item, ComponentItem) else [end_item.t1])[end_ref["term"]]
+            except Exception:
+                continue
+            wire = WireItem(start_term)
+            wire.end_terminal = end_term
+            end_term.wires.append(wire)
+            wire.update_position()
+            self.scene.addItem(wire)
+            self.scene.wires.append(wire)
+
+        params = state.get("parameters", {})
+        self.dt_input.setText(params.get("dt", self.dt_input.text()))
+        self.end_time_input.setText(params.get("t_end", self.end_time_input.text()))
+        self.tolerance_input.setText(params.get("tolerance", self.tolerance_input.text()))
+        self.text_editor.setPlainText(state.get("netlist_text", self.text_editor.toPlainText()))
+
     def run_transient(self):
         self.plot_widget.clear()
         text = self.text_editor.toPlainText().strip()
+        if not text and self.scene.components:
+            self.compile_canvas()
+            text = self.text_editor.toPlainText().strip()
         if not text:
             self.status.showMessage("⚠  Netlist is empty — compile first or type manually")
             return
         try:
-            dt       = float(self.dt_input.text())
-            end_time = float(self.end_time_input.text())
+            dt        = float(self.dt_input.text())
+            end_time  = float(self.end_time_input.text())
+            tolerance = float(self.tolerance_input.text())
 
             self.status.showMessage("Running transient simulation…")
             QApplication.processEvents()
 
             components      = network_helper.parse_network(text)
             graph, clist    = network_helper.assemble_network_graph(components)
-            voltage_history = lumped.MNA_time(graph, clist, dt, end_time, plot_voltage=False)
+            if tolerance == 0.0 and any(isinstance(c, Diode) for c in clist):
+                tolerance = 0.01
+                self.tolerance_input.setText("0.01")
+
+            voltage_history = lumped.MNA_time(
+                graph, clist, dt, end_time,
+                plot_voltage=False, tolerance=tolerance
+            )
 
             n_steps   = len(next(iter(voltage_history.values())))
             time_axis = np.arange(n_steps) * dt
@@ -871,6 +1104,9 @@ class MainWindow(QMainWindow):
         before solving, which is the correct DC operating-point treatment.
         """
         text = self.text_editor.toPlainText().strip()
+        if not text and self.scene.components:
+            self.compile_canvas()
+            text = self.text_editor.toPlainText().strip()
         if not text:
             self.status.showMessage("⚠  Netlist is empty — compile first")
             return

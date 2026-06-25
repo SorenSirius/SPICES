@@ -1,0 +1,38 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+
+.venv/
+venv/
+env/
+
+# IDE files
+
+.vscode/
+.idea/
+
+# LTspice backups and outputs
+
+*.raw
+*.log
+*.op.raw
+*.net
+
+# Personal documents and notes
+
+digital_electronics_notes.md
+Computational Physics_ Problem Solving with Python{Rubin H. Landau, Manuel J. Páez, Cristian C. Bordeianu}(2024, Wiley-VCH){107725342} libgen.li.pdf
+
+# GUI prototype not intended for repo
+
+gui.py
+
+# Optional: ignore local experiments
+
+*.tmp
+*.bak
